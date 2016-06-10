@@ -1,0 +1,3 @@
+*.o
+smtp-http-proxy
+Makefile

@@ -1,0 +1,26 @@
+IMAGE_NAME=smtp-http-proxy
+DEV_IMAGE_NAME=$(IMAGE_NAME)-dev
+
+.DEFAULT: build
+build:
+	docker build -t $(IMAGE_NAME) $(CURDIR)
+	docker run --rm=true -v $(CURDIR)/docker-build:/opt/build $(IMAGE_NAME) cp /opt/src/smtp-http-proxy /opt/build
+
+.PHONY: dev-build
+dev-build:
+	docker build -t $(DEV_IMAGE_NAME) -f $(CURDIR)/Dockerfile.dev $(CURDIR)
+
+.PHONY: dev-run
+dev-run: start
+
+.PHONY: dev-start
+dev-start:
+	eval $$(docker-machine env default) && docker run -it --rm=true -v $(CURDIR):/opt/src --name=$(DEV_DEV_IMAGE_NAME) $(DEV_IMAGE_NAME)
+
+.PHONY: stop
+dev-stop:
+	eval $$(docker-machine env default) && docker stop $(DEV_DEV_IMAGE_NAME)
+
+.PHONY: shell
+dev-shell:
+	eval $$(docker-machine env default) && docker exec -it $(DEV_DEV_IMAGE_NAME) /bin/bash
