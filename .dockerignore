@@ -1,0 +1,8 @@
+*.o
+smtp-http-proxy
+Makefile
+docker-build
+unittests/unittests
+.git/*
+packages/alpine/smtp-http-proxy/src
+.scon*

@@ -1,0 +1,40 @@
+# Contributor: Remko Tronçon <remko@el-tramo.be>
+# Maintainer: Remko Tronçon <remko@el-tramo.be>
+pkgname=smtp-http-proxy
+pkgver=0.0.1
+pkgrel=0
+pkgdesc="Simple SMTP to HTTP proxy"
+url="https://el-tramo.be/smtp-http-proxy"
+arch="all"
+license="BSD"
+depends="curl boost boost-program_options boost-system"
+makedepends="scons curl-dev boost-dev"
+install=""
+subpackages=""
+source="${pkgname}-${pkgver}.tar.gz::https://github.com/remko/smtp-http-proxy/archive/v$pkgver.tar.gz"
+
+_builddir="$srcdir"/smtp-http-proxy-$pkgver
+prepare() {
+	local i
+	cd "$_builddir"
+	for i in $source; do
+		case $i in
+		*.patch) msg $i; patch -p1 -i "$srcdir"/$i || return 1;;
+		esac
+	done
+}
+
+build() {
+	cd "$_builddir"
+	scons || return 1
+}
+
+package() {
+	cd "$_builddir"
+	scons / || return 1
+	mkdir -p "$pkgdir/usr/bin"
+	cp smtp-http-proxy "$pkgdir/usr/bin" || return 1
+}
+md5sums="720cf251d5b2448870058a21267302e2  ${pkgname}-${pkgver}.tar.gz"
+sha256sums="f6174e02eb09945471f24d04db02a192366ce165e86d67bf39668067aee2699e  ${pkgname}-${pkgver}.tar.gz"
+sha512sums="f9b0b3c334a04bce1e20a62bbd7dfe94a769742271351e7ce8b6d57a00ae1aa958737b42ae5073563ad792a7c3ae1a111f36ec7d6300ca44339f1c08125a588d  ${pkgname}-${pkgver}.tar.gz"

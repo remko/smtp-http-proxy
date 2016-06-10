@@ -1,0 +1,5 @@
+/smtp-http-proxy
+*.o
+.scon*
+.DS_Store
+docker-build
