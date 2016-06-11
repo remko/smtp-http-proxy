@@ -46,7 +46,7 @@ else :
 		if platform.machine() == "x86_64" :
 			env["CCFLAGS"] = ["-arch", "x86_64"]
 			env.Append(LINKFLAGS = ["-arch", "x86_64"])
-		env.Append(CXXFLAGS = ["-Wall"])
+		env.Append(CXXFLAGS = ["-Wall", "-Wextra"])
 
 # LibCURL
 libcurl_flags = {

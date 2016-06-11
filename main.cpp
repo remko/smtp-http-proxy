@@ -8,7 +8,10 @@
 #include <boost/program_options.hpp>
 #include <boost/optional/optional.hpp>
 #include <iostream>
+#include <mutex>
+#include <thread>
 #include <json.hpp>
+#include <deque>
 
 using boost::asio::ip::tcp;
 namespace po = boost::program_options;
@@ -26,31 +29,96 @@ class Sender {
 		virtual void send(const std::string& response, bool close = false) = 0;
 };
 
+class SMTPMessage {
+	public:
+		SMTPMessage(
+				const std::string& from,
+				const std::vector<std::string>& to,
+				const std::string& data) :
+					from(from),
+					to(to),
+					data(data) {
+		}
+
+		const std::string& getFrom() const {
+			return from;
+		}
+
+		const std::vector<std::string>& getTo() const {
+			return to;
+		}
+
+		const std::string& getData() const {
+			return data;
+		}
+
+	private:
+		std::string from;
+		std::vector<std::string> to;
+		std::string data;
+};
+
 class SMTPHandler {
 	public:
-		virtual void handle(
-				const std::vector<std::string>& from,
-				const std::vector<std::string>& to,
-				const std::string& data) = 0;
+		virtual void handle(const SMTPMessage& message) = 0;
 };
 
 using json = nlohmann::json;
 
+static size_t curlWriteCallback(void* contents, size_t size, size_t nmemb, void*) {
+	size_t realsize = size * nmemb;
+	if (logLevel >= Debug) {
+		std::cerr << std::string((const char*) contents, realsize) << std::endl;
+	}
+	return realsize;
+}
+
 class HTTPPoster : public SMTPHandler {
 	public:
-		HTTPPoster(const std::string& url) : url(url) {
+		HTTPPoster(const std::string& url) : 
+				url(url),
+				stopRequested(false) {
+			thread = new std::thread(std::bind(&HTTPPoster::run, this));
 		}
 
-		virtual void handle(
-				const std::vector<std::string>& from,
-				const std::vector<std::string>& to,
-				const std::string& data) override {
+		virtual void handle(const SMTPMessage& message) override {
+			{
+				std::lock_guard<std::mutex> lock(queueMutex);
+				queue.push_back(message);
+			}
+			queueNonEmpty.notify_one();
+		}
+
+		void stop() {
+			stopRequested = true;
+			queueNonEmpty.notify_one();
+			thread->join();
+			delete thread;
+			thread = 0;
+		}
+
+	private:
+		void run() {
+			while (!stopRequested) {
+				boost::optional<SMTPMessage> message;
+				{
+					std::unique_lock<std::mutex> lock(queueMutex);
+					queueNonEmpty.wait(lock, [this]() { return !queue.empty() || stopRequested; });
+					if (stopRequested) { break; }
+					message = queue.front();
+					queue.pop_front();
+				}
+				doHandle(*message);
+			}
+		}
+
+		void doHandle(const SMTPMessage& message) {
 			json j;
 			j["envelope"] = {
-				{"from", from},
-				{"to", to}
+				{"from", message.getFrom()},
+				{"to", message.getTo()}
 			};
-			j["data"] = data;
+			j["data"] = message.getData();
 			std::string body = j.dump();
 
 			if (logLevel >= Debug) { std::cerr << "Handling: " << body << " (" << body.size() << " bytes)" << std::endl; }
@@ -61,6 +129,7 @@ class HTTPPoster : public SMTPHandler {
 			curl_easy_setopt(curl.get(), CURLOPT_HTTPHEADER, slist); 
 			curl_easy_setopt(curl.get(), CURLOPT_CUSTOMREQUEST, "POST");
 			curl_easy_setopt(curl.get(), CURLOPT_POSTFIELDS, body.c_str());
+			curl_easy_setopt(curl.get(), CURLOPT_WRITEFUNCTION, curlWriteCallback);
 			curl_easy_setopt(curl.get(), CURLOPT_FOLLOWLOCATION, 1);
 			curl_easy_setopt(curl.get(), CURLOPT_MAXREDIRS, 5);
 			curl_easy_setopt(curl.get(), CURLOPT_URL, url.c_str());
@@ -84,11 +153,22 @@ class HTTPPoster : public SMTPHandler {
 
 	private:
 		std::string url;
+		std::atomic_bool stopRequested;
+		std::thread* thread;
+		std::deque<SMTPMessage> queue;
+		std::mutex queueMutex;
+		std::condition_variable queueNonEmpty;
 };
 
 class SMTPSession {
 	public:
 		SMTPSession(Sender& sender, SMTPHandler& handler) : sender(sender), handler(handler), receivingData(false) {
+		}
+
+		void reset() {
+			from = boost::optional<std::string>();
+			to.clear();
+			dataLines = std::stringstream();
 		}
 
 		void start() {
@@ -101,6 +181,13 @@ class SMTPSession {
 				if (data == ".") {
 					receivingData = false;
 					send("250 Ok");
+					if (from) {
+						handler.handle(SMTPMessage(*from, to, dataLines.str()));
+					}
+					else {
+						std::cerr << "Didn't receive FROM; not handling mail" << std::endl;
+					}
+					reset();
 				}
 				else {
 					dataLines << data << std::endl;
@@ -115,19 +202,26 @@ class SMTPSession {
 					send("354 Send data");
 				}
 				else if (boost::algorithm::starts_with(data, "QUIT")) {
-					handler.handle(from, to, dataLines.str());
 					send("221 Bye", true);
 				}
 				else if (boost::algorithm::starts_with(data, "MAIL FROM:")) {
-					from.push_back(data.substr(10));
+					reset();
+					from = data.substr(10);
 					send("250 Ok");
 				}
 				else if (boost::algorithm::starts_with(data, "RCPT TO:")) {
 					to.push_back(data.substr(8));
 					send("250 Ok");
 				}
-				else {
+				else if (boost::algorithm::starts_with(data, "NOOP")) {
 					send("250 Ok");
+				}
+				else if (boost::algorithm::starts_with(data, "RSET")) {
+					reset();
+					send("250 Ok");
+				}
+				else {
+					send("502 Command not implemented");
 				}
 			}
 		}
@@ -142,7 +236,7 @@ class SMTPSession {
 		Sender& sender;
 		SMTPHandler& handler;
 		bool receivingData;
-		std::vector<std::string> from;
+		boost::optional<std::string> from;
 		std::vector<std::string> to;
 		std::stringstream dataLines;
 };
@@ -178,9 +272,8 @@ class LineBufferingReceiver {
 
 class Session : public std::enable_shared_from_this<Session>, public Sender {
 	public:
-		Session(tcp::socket socket, const std::string& httpURL) : 
+		Session(tcp::socket socket, HTTPPoster& httpPoster) :
 				socket(std::move(socket)),
-				httpPoster(httpURL),
 				smtpSession(*this, httpPoster),
 				receiver(smtpSession) {
 		}
@@ -224,7 +317,6 @@ class Session : public std::enable_shared_from_this<Session>, public Sender {
 		tcp::socket socket;
 		enum { maxLength = 8192 };
 		std::array<char, 8192> buffer;
-		HTTPPoster httpPoster;
 		SMTPSession smtpSession;
 		LineBufferingReceiver<SMTPSession> receiver;
 };
@@ -235,8 +327,8 @@ class Server {
 				boost::asio::io_service& ioService, 
 				int port, 
 				boost::optional<int> notifyFD,
-				const std::string& httpURL) : 
-					httpURL(httpURL),
+				HTTPPoster& httpPoster) :
+					httpPoster(httpPoster),
 					acceptor(ioService, tcp::endpoint(tcp::v4(), port)),
 					socket(ioService) {
 			doAccept();
@@ -246,19 +338,20 @@ class Server {
 				auto closeResult = close(*notifyFD);
 				if (closeResult < 0) { std::cerr << "Error " << closeResult << " closing descriptor " << *notifyFD << std::endl; }
 			}
+			if (logLevel >= Normal) { std::cerr << "Listening for SMTP connections on " << tcp::endpoint(tcp::v4(), port) << std::endl; }
 		}
 
 	private:
 		void doAccept() {
 			acceptor.async_accept(socket, [this](boost::system::error_code ec) {
 				if (!ec) {
-					std::make_shared<Session>(std::move(socket), httpURL)->start();
+					std::make_shared<Session>(std::move(socket), httpPoster)->start();
 				}
 				doAccept();
 			});
 		}
 
-		std::string httpURL;
+		HTTPPoster& httpPoster;
 		tcp::acceptor acceptor;
 		tcp::socket socket;
 };
@@ -304,13 +397,18 @@ int main(int argc, char* argv[]) {
 		}
 
 		boost::asio::io_service io_service;
+
+		HTTPPoster httpPoster(httpURL);
 		Server s(
 				io_service, 
 				boost::get_optional_value_or(port, 25),
 				notifyFD,
-				httpURL
+				httpPoster
 		);
 		io_service.run();
+
+		httpPoster.stop();
+
 	}
 	catch (std::exception& e) {
 		std::cerr << "Exception: " << e.what() << "\n";
