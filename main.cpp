@@ -14,6 +14,7 @@
 #include <deque>
 
 using boost::asio::ip::tcp;
+using boost::asio::ip::address;
 namespace po = boost::program_options;
 
 enum LogLevel {
@@ -325,11 +326,12 @@ class Server {
 	public:
 		Server(
 				boost::asio::io_service& ioService, 
+				boost::asio::ip::address& bindAddress,
 				int port, 
 				boost::optional<int> notifyFD,
 				HTTPPoster& httpPoster) :
 					httpPoster(httpPoster),
-					acceptor(ioService, tcp::endpoint(tcp::v4(), port)),
+					acceptor(ioService, tcp::endpoint(bindAddress, port)),
 					socket(ioService) {
 			doAccept();
 			if (notifyFD) {
@@ -338,7 +340,7 @@ class Server {
 				auto closeResult = close(*notifyFD);
 				if (closeResult < 0) { std::cerr << "Error " << closeResult << " closing descriptor " << *notifyFD << std::endl; }
 			}
-			if (logLevel >= Normal) { std::cerr << "Listening for SMTP connections on " << tcp::endpoint(tcp::v4(), port) << std::endl; }
+			if (logLevel >= Normal) { std::cerr << "Listening for SMTP connections on " << tcp::endpoint(bindAddress, port) << std::endl; }
 		}
 
 	private:
@@ -365,7 +367,8 @@ int main(int argc, char* argv[]) {
 			("help", "Show this help message")
 			("debug", "Enable debug output")
 			("notify-fd", po::value<int>(), "Write to file descriptor when ready")
-			("port", po::value<int>(), "SMTP port")
+			("bind", po::value<std::string>(), "SMTP address to bind (default: 0.0.0.0)")
+			("port", po::value<int>(), "SMTP port to bind (default: 25)")
 			("url", po::value<std::string>(), "HTTP URL");
 		po::variables_map vm;
 		po::store(po::parse_command_line(argc, argv, options), vm);
@@ -373,6 +376,7 @@ int main(int argc, char* argv[]) {
 
 		boost::optional<int> port;
 		boost::optional<int> notifyFD;
+		address bindAddress;
 		std::string httpURL;
 
 		if (vm.count("help")) {
@@ -389,6 +393,9 @@ int main(int argc, char* argv[]) {
 			std::cerr << "Missing --url parameter" << std::endl;
 			return -1;
 		}
+		if (vm.count("bind")) {
+			bindAddress = address::from_string(vm["bind"].as<std::string>());
+		}
 		if (vm.count("debug")) {
 			logLevel = Debug;
 		}
@@ -401,6 +408,7 @@ int main(int argc, char* argv[]) {
 		HTTPPoster httpPoster(httpURL);
 		Server s(
 				io_service, 
+				bindAddress,
 				boost::get_optional_value_or(port, 25),
 				notifyFD,
 				httpPoster
