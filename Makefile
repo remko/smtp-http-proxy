@@ -13,6 +13,6 @@ apk:
 	docker build -t $(APK_IMAGE_NAME) -f $(CURDIR)/Dockerfile.apk $(CURDIR)
 	docker run --rm=true -v $(CURDIR)/docker-build:/opt/build $(APK_IMAGE_NAME) cp -r /home/build/packages /opt/build
 
-.PHONY: sync-apk
-apk-sync:
-	rsync -avz docker-build/packages/alpine/ el-tramo.be:cdn/alpine/smtp-http-proxy/
+.PHONY: apk-deploy
+apk-deploy:
+	rsync -avz --delete docker-build/packages/alpine/ el-tramo.be:cdn/alpine/smtp-http-proxy/
