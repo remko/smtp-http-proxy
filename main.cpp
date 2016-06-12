@@ -192,7 +192,8 @@ class SMTPSession {
 		void reset() {
 			from = boost::optional<std::string>();
 			to.clear();
-			dataLines = std::stringstream();
+			dataLines.str("");
+			dataLines.clear();
 		}
 
 		void start() {
