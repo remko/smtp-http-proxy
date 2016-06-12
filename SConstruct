@@ -7,6 +7,7 @@ vars.Add(BoolVariable("check", "Run unit tests", "no"))
 # FIXME: Don't hardcode this
 vars.Add(PathVariable("boost_includedir", "Boost headers location", "/usr/local/homebrew/opt/boost/include" , PathVariable.PathAccept))
 vars.Add(PathVariable("boost_libdir", "Boost library location", "/usr/local/homebrew/opt/boost/lib", PathVariable.PathAccept))
+vars.Add(PathVariable("boost_libsuffix", "Boost library suffix", "-mt", PathVariable.PathAccept))
 
 env = Environment(ENV = {'PATH': os.environ['PATH']}, variables = vars)
 Help(vars.GenerateHelpText(env))
@@ -48,6 +49,12 @@ else :
 			env.Append(LINKFLAGS = ["-arch", "x86_64"])
 		env.Append(CXXFLAGS = ["-Wall", "-Wextra"])
 
+if ARGUMENTS.get("INSTALLDIR", "") :
+	if os.path.isabs(ARGUMENTS["INSTALLDIR"]) :
+		env["INSTALLDIR"] = Dir(ARGUMENTS["INSTALLDIR"]).abspath
+	else :
+		env["INSTALLDIR"] = Dir("#/" + ARGUMENTS["INSTALLDIR"]).abspath
+
 # LibCURL
 libcurl_flags = {
 	"LIBS" : ["curl"]
@@ -57,7 +64,7 @@ libcurl_flags = {
 boost_flags = {
 	"CXXFLAGS": ["-isystem", env["boost_includedir"]],
 	"LIBPATH": [env["boost_libdir"]],
-	"LIBS": ["boost_system-mt", "boost_program_options-mt", "boost_log_setup-mt", "boost_log-mt", "boost_thread-mt"],
+	"LIBS": ["boost_system${boost_libsuffix}", "boost_program_options${boost_libsuffix}", "boost_log_setup${boost_libsuffix}", "boost_log${boost_libsuffix}", "boost_thread${boost_libsuffix}"],
 	"CPPDEFINES": ["BOOST_ALL_DYN_LINK"]
 }
 
@@ -66,9 +73,11 @@ prog_env = env.Clone()
 prog_env.MergeFlags(libcurl_flags)
 prog_env.MergeFlags(boost_flags)
 prog_env.Append(CPPPATH = ["Vendor/json"])
-prog_env.Program("smtp-http-proxy", [
+prog = prog_env.Program("smtp-http-proxy", [
 	"main.cpp"
 ])
+if prog_env.get("INSTALLDIR", "") :
+	prog_env.Install(os.path.join(prog_env["INSTALLDIR"], "bin"), prog)
 
 # Tests
 check_env = env.Clone()

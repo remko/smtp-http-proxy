@@ -386,42 +386,33 @@ int main(int argc, char* argv[]) {
 	curl_global_init(CURL_GLOBAL_ALL);
 
 	try {
+		int port;
+		std::string httpURL;
+
 		po::options_description options("Allowed options");
 		options.add_options()
 			("help", "Show this help message")
 			("verbose", "Enable verbose output")
 			("debug", "Enable debug output")
 			("notify-fd", po::value<int>(), "Write to file descriptor when ready")
-			("bind", po::value<std::string>(), "SMTP address to bind (default: 0.0.0.0)")
-			("port", po::value<int>(), "SMTP port to bind (default: 25)")
-			("url", po::value<std::string>(), "HTTP URL");
+			("bind", po::value<std::string>()->default_value("0.0.0.0"), "SMTP address to bind")
+			("port", po::value<int>(&port)->default_value(25), "SMTP port to bind")
+			("url", po::value<std::string>(&httpURL)->required(), "HTTP URL");
 		po::variables_map vm;
 		po::store(po::parse_command_line(argc, argv, options), vm);
+		if (vm.count("help")) {
+			std::cout << options << "\n";
+				return 0;
+		}
 		po::notify(vm);    
 
 		boost::log::core::get()->set_filter(boost::log::trivial::severity >= boost::log::trivial::warning);
 		boost::log::add_console_log(std::clog, boost::log::keywords::format = "[%TimeStamp%] %Message%");
 		boost::log::add_common_attributes();
 
-		boost::optional<int> port;
 		boost::optional<int> notifyFD;
 		address bindAddress;
-		std::string httpURL;
 
-		if (vm.count("help")) {
-			std::cout << options << "\n";
-				return 0;
-		}
-		if (vm.count("port")) {
-			port = vm["port"].as<int>();
-		}
-		if (vm.count("url")) {
-			httpURL = vm["url"].as<std::string>();
-		}
-		else {
-			std::cerr << "Missing --url parameter" << std::endl;
-			return -1;
-		}
 		if (vm.count("bind")) {
 			bindAddress = address::from_string(vm["bind"].as<std::string>());
 		}
@@ -441,7 +432,7 @@ int main(int argc, char* argv[]) {
 		Server s(
 				io_service, 
 				bindAddress,
-				boost::get_optional_value_or(port, 25),
+				port,
 				notifyFD,
 				httpPoster
 		);
@@ -449,6 +440,9 @@ int main(int argc, char* argv[]) {
 
 		httpPoster.stop();
 
+	}
+	catch (boost::program_options::error& e) {
+		std::cerr << e.what() << std::endl;
 	}
 	catch (std::exception& e) {
 		LOG(fatal) << "Exception: " << e.what() << "\n";

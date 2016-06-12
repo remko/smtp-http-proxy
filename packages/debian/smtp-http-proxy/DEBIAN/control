@@ -1,0 +1,10 @@
+Package: smtp-http-proxy
+Version: 0.3
+Section: custom
+Priority: optional
+Architecture: all
+Essential: no
+Depends: libboost-log1.55.0 (>= 1.55.0), libboost-program-options1.55.0 (>= 1.55.0), libboost-system1.55.0 (>= 1.55.0), libboost-thread1.55.0 (>= 1.55.0), libcurl3 (>= 7.38.0-4+deb8u3)
+Installed-Size: 1024
+Maintainer: Remko Tronçon <remko@el-tramo.be>
+Description: Lightweight SMTP to HTTP proxy

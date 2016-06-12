@@ -24,4 +24,8 @@ debian:
 	-rm -rf docker-build/debian
 	mkdir -p docker-build/debian
 	docker build -t $(DEBIAN_IMAGE_NAME) -f $(CURDIR)/Dockerfile.debian $(CURDIR)
-	# docker run --rm=true -v $(CURDIR)/docker-build:/opt/build $(DEBIAN_IMAGE_NAME) cp -r /home/build/packages /opt/build/debian
+	docker run --rm=true -v $(CURDIR)/docker-build:/opt/build $(DEBIAN_IMAGE_NAME) sh -c 'cp -r /opt/packages/debian /opt/build'
+
+.PHONY: debian-deploy
+debian-deploy:
+	rsync -avz --delete docker-build/debian/ el-tramo.be:cdn/debian/
