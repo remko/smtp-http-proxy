@@ -1,5 +1,5 @@
 Package: smtp-http-proxy
-Version: 0.3
+Version: 0.4
 Section: custom
 Priority: optional
 Architecture: all

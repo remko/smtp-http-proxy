@@ -1,7 +1,7 @@
 # Contributor: Remko Tronçon <remko@el-tramo.be>
 # Maintainer: Remko Tronçon <remko@el-tramo.be>
 pkgname=smtp-http-proxy
-pkgver=0.3
+pkgver=0.4
 pkgrel=0
 pkgdesc="Simple SMTP to HTTP proxy"
 url="https://el-tramo.be/smtp-http-proxy"
@@ -35,6 +35,6 @@ package() {
 	mkdir -p "$pkgdir/usr/bin"
 	cp smtp-http-proxy "$pkgdir/usr/bin" || return 1
 }
-md5sums="891052667accdbad211250662e1d7288  ${pkgname}-${pkgver}.tar.gz"
-sha256sums="abef80bb706c09824dba6b2556f2fa310e276f97791b7b9565ca91f805b91536  ${pkgname}-${pkgver}.tar.gz"
-sha512sums="bfdb22eedc56630ec736d4de9a601c801fba94dc286c4b328841fa8c2c705b4dae78601d378f44e10ff90bc6ab1e34fee0b3807f62ab7bf2a3944e3bf976b598  ${pkgname}-${pkgver}.tar.gz"
+md5sums="3555136bcc592f6abaf761cb8c382a61  ${pkgname}-${pkgver}.tar.gz"
+sha256sums="fc2a581ecf91bc173e38e0839f2e6a9ee4a54f18738ae4b3edf811fc0596f75a  ${pkgname}-${pkgver}.tar.gz"
+sha512sums="4ac34c621bd24801d3c2055599e0348b698382e229902e9e608ea07970e67cb1bebe705e42aac8e782c3abe84c3425b28e218d589471767fb5223de14592afe3  ${pkgname}-${pkgver}.tar.gz"

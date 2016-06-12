@@ -10,7 +10,7 @@ RUN cd /opt/src && \
 	cd packages/debian && \
 	dpkg-deb --build smtp-http-proxy && \
 	mkdir -p /opt/packages/debian/smtp-http-proxy && \
-	mv smtp-http-proxy.deb /opt/packages/debian/smtp-http-proxy/smtp-http-proxy-0.3-1.deb && \
+	mv smtp-http-proxy.deb /opt/packages/debian/smtp-http-proxy/smtp-http-proxy-0.4-1.deb && \
 	cd /opt/packages && \
 	dpkg-scanpackages debian/smtp-http-proxy /dev/null | gzip -9c > debian/smtp-http-proxy/Packages.gz
 
