@@ -57,7 +57,8 @@ libcurl_flags = {
 boost_flags = {
 	"CXXFLAGS": ["-isystem", env["boost_includedir"]],
 	"LIBPATH": [env["boost_libdir"]],
-	"LIBS": ["boost_system", "boost_program_options"]
+	"LIBS": ["boost_system-mt", "boost_program_options-mt", "boost_log_setup-mt", "boost_log-mt", "boost_thread-mt"],
+	"CPPDEFINES": ["BOOST_ALL_DYN_LINK"]
 }
 
 # Executable

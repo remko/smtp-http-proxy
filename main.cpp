@@ -13,18 +13,18 @@
 #include <thread>
 #include <json.hpp>
 #include <deque>
+#include <boost/log/utility/setup/console.hpp>
+#include <boost/log/utility/setup/common_attributes.hpp>
+#include <boost/log/expressions.hpp>
+#include <boost/log/trivial.hpp>
+#include <boost/log/core.hpp>
+#include <boost/algorithm/string.hpp>
+
+#define LOG(a) BOOST_LOG_TRIVIAL(a)
 
 using boost::asio::ip::tcp;
 using boost::asio::ip::address;
 namespace po = boost::program_options;
-
-enum LogLevel {
-	Silent = 0,
-	Normal = 1,
-	Verbose = 2,
-	Debug = 3
-};
-LogLevel logLevel;
 
 class Sender {
 	public:
@@ -69,10 +69,33 @@ using json = nlohmann::json;
 
 static size_t curlWriteCallback(void* contents, size_t size, size_t nmemb, void*) {
 	size_t realsize = size * nmemb;
-	if (logLevel >= Debug) {
-		std::cerr << std::string((const char*) contents, realsize) << std::endl;
-	}
+	LOG(debug) << "HTTP: <- " << std::string((const char*) contents, realsize);
 	return realsize;
+}
+
+static int curlDebugCallback(CURL*, curl_infotype type, char* data, size_t size, void *) {
+	auto text = boost::algorithm::trim_right_copy(std::string(data, size));
+	switch (type) {
+		case CURLINFO_TEXT:
+			LOG(debug) << "HTTP: " << data;
+		case CURLINFO_HEADER_OUT:
+			LOG(debug) << "HTTP: -> H: " << text;
+			break;
+		case CURLINFO_DATA_OUT:
+			break;
+		case CURLINFO_SSL_DATA_OUT:
+			break;
+		case CURLINFO_HEADER_IN:
+			LOG(debug) << "HTTP: <- H: " << text;
+			break;
+		case CURLINFO_DATA_IN:
+			break;
+		case CURLINFO_SSL_DATA_IN:
+			break;
+		default: 
+			return 0;
+	}
+	return 0;
 }
 
 class HTTPPoster : public SMTPHandler {
@@ -123,7 +146,7 @@ class HTTPPoster : public SMTPHandler {
 			j["data"] = message.getData();
 			std::string body = j.dump();
 
-			if (logLevel >= Debug) { std::cerr << "Handling: " << body << " (" << body.size() << " bytes)" << std::endl; }
+			LOG(info) << "Processing message: " << body;
 
 			std::shared_ptr<CURL> curl(curl_easy_init(), curl_easy_cleanup);
 			struct curl_slist *slist = NULL; 
@@ -132,25 +155,24 @@ class HTTPPoster : public SMTPHandler {
 			curl_easy_setopt(curl.get(), CURLOPT_CUSTOMREQUEST, "POST");
 			curl_easy_setopt(curl.get(), CURLOPT_POSTFIELDS, body.c_str());
 			curl_easy_setopt(curl.get(), CURLOPT_WRITEFUNCTION, curlWriteCallback);
+			curl_easy_setopt(curl.get(), CURLOPT_DEBUGFUNCTION, curlDebugCallback);
+			curl_easy_setopt(curl.get(), CURLOPT_VERBOSE, 1);
 			curl_easy_setopt(curl.get(), CURLOPT_FOLLOWLOCATION, 1);
 			curl_easy_setopt(curl.get(), CURLOPT_MAXREDIRS, 5);
 			curl_easy_setopt(curl.get(), CURLOPT_URL, url.c_str());
-			if (logLevel >= Debug) { curl_easy_setopt(curl.get(), CURLOPT_VERBOSE, 1); }
 
-			if (logLevel >= Debug) { std::cerr << "---- Start HTTP request ----" << std::endl; }
 			auto ret = curl_easy_perform(curl.get());
 			if (ret != CURLE_OK) {
-				std::cerr << "ERROR " << curl_easy_strerror(ret) << std::endl;
+				LOG(error) << "ERROR " << curl_easy_strerror(ret) << std::endl;
 			}
 			long statusCode;
 			ret = curl_easy_getinfo(curl.get(), CURLINFO_RESPONSE_CODE, &statusCode);
 			if (ret != CURLE_OK) {
-				std::cerr << "ERROR " << curl_easy_strerror(ret) << std::endl;
+				LOG(error) << "ERROR " << curl_easy_strerror(ret) << std::endl;
 			}
 			if (statusCode != 200) {
-				std::cerr << "Error: Unexpected status code: " << statusCode << std::endl;
+				LOG(error) << "Error: Unexpected status code: " << statusCode;
 			}
-			if (logLevel >= Debug) { std::cerr << std::endl << "---- End HTTP request ----" << std::endl; }
 		}
 
 	private:
@@ -178,7 +200,7 @@ class SMTPSession {
 		}
 
 		void receive(const std::string& data) {
-			if (logLevel >= Debug) { std::cerr << "<- " << data << std::endl; }
+			LOG(debug) << "SMTP <- " << data;
 			if (receivingData) {
 				if (data == ".") {
 					receivingData = false;
@@ -187,7 +209,7 @@ class SMTPSession {
 						handler.handle(SMTPMessage(*from, to, dataLines.str()));
 					}
 					else {
-						std::cerr << "Didn't receive FROM; not handling mail" << std::endl;
+						LOG(warning) << "Didn't receive FROM; not handling mail";
 					}
 					reset();
 				}
@@ -229,7 +251,7 @@ class SMTPSession {
 		}
 
 		void send(const std::string& data, bool closeAfterNextWrite = false) {
-			if (logLevel >= Debug) { std::cerr << "-> " << data << std::endl; }
+			LOG(debug) << "SMTP -> " << data;
 			sender.send(data, closeAfterNextWrite);
 		}
 
@@ -337,11 +359,11 @@ class Server {
 			doAccept();
 			if (notifyFD) {
 				auto writeResult = write(*notifyFD, "\n", 1);
-				if (writeResult <= 0) { std::cerr << "Error " << writeResult << " writing to descriptor " << *notifyFD << std::endl; }
+				if (writeResult <= 0) { LOG(error) << "Error " << writeResult << " writing to descriptor " << *notifyFD; }
 				auto closeResult = close(*notifyFD);
-				if (closeResult < 0) { std::cerr << "Error " << closeResult << " closing descriptor " << *notifyFD << std::endl; }
+				if (closeResult < 0) { LOG(error) << "Error " << closeResult << " closing descriptor " << *notifyFD; }
 			}
-			if (logLevel >= Normal) { std::cerr << "Listening for SMTP connections on " << tcp::endpoint(bindAddress, port) << std::endl; }
+			LOG(info) << "Listening for SMTP connections on " << tcp::endpoint(bindAddress, port);
 		}
 
 	private:
@@ -366,6 +388,7 @@ int main(int argc, char* argv[]) {
 		po::options_description options("Allowed options");
 		options.add_options()
 			("help", "Show this help message")
+			("verbose", "Enable verbose output")
 			("debug", "Enable debug output")
 			("notify-fd", po::value<int>(), "Write to file descriptor when ready")
 			("bind", po::value<std::string>(), "SMTP address to bind (default: 0.0.0.0)")
@@ -374,6 +397,10 @@ int main(int argc, char* argv[]) {
 		po::variables_map vm;
 		po::store(po::parse_command_line(argc, argv, options), vm);
 		po::notify(vm);    
+
+		boost::log::core::get()->set_filter(boost::log::trivial::severity >= boost::log::trivial::warning);
+		boost::log::add_console_log(std::clog, boost::log::keywords::format = "[%TimeStamp%] %Message%");
+		boost::log::add_common_attributes();
 
 		boost::optional<int> port;
 		boost::optional<int> notifyFD;
@@ -397,8 +424,11 @@ int main(int argc, char* argv[]) {
 		if (vm.count("bind")) {
 			bindAddress = address::from_string(vm["bind"].as<std::string>());
 		}
+		if (vm.count("verbose")) {
+			boost::log::core::get()->set_filter(boost::log::trivial::severity >= boost::log::trivial::info);
+		}
 		if (vm.count("debug")) {
-			logLevel = Debug;
+			boost::log::core::get()->set_filter(boost::log::trivial::severity >= boost::log::trivial::debug);
 		}
 		if (vm.count("notify-fd")) {
 			notifyFD = vm["notify-fd"].as<int>();
@@ -420,6 +450,6 @@ int main(int argc, char* argv[]) {
 
 	}
 	catch (std::exception& e) {
-		std::cerr << "Exception: " << e.what() << "\n";
+		LOG(fatal) << "Exception: " << e.what() << "\n";
 	}
 }
