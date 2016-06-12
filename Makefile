@@ -2,6 +2,7 @@ IMAGE_NAME=smtp-http-proxy
 APK_IMAGE_NAME=$(IMAGE_NAME)-apk
 
 .DEFAULT: build
+.PHONY: build
 build:
 	docker build -t $(IMAGE_NAME) $(CURDIR)
 	docker run --rm=true -v $(CURDIR)/docker-build:/opt/build $(IMAGE_NAME) cp /opt/src/smtp-http-proxy /opt/build

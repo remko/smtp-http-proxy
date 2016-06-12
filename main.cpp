@@ -8,6 +8,7 @@
 #include <boost/program_options.hpp>
 #include <boost/optional/optional.hpp>
 #include <iostream>
+#include <condition_variable>
 #include <mutex>
 #include <thread>
 #include <json.hpp>
