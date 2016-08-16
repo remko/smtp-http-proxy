@@ -78,6 +78,7 @@ static int curlDebugCallback(CURL*, curl_infotype type, char* data, size_t size,
 	switch (type) {
 		case CURLINFO_TEXT:
 			LOG(debug) << "HTTP: " << data;
+			break;
 		case CURLINFO_HEADER_OUT:
 			LOG(debug) << "HTTP: -> H: " << text;
 			break;
@@ -100,8 +101,9 @@ static int curlDebugCallback(CURL*, curl_infotype type, char* data, size_t size,
 
 class HTTPPoster : public SMTPHandler {
 	public:
-		HTTPPoster(const std::string& url) : 
+		HTTPPoster(const std::string& url, const std::vector<std::string>& headers) : 
 				url(url),
+				headers(headers),
 				stopRequested(false) {
 			thread = new std::thread(std::bind(&HTTPPoster::run, this));
 		}
@@ -151,6 +153,9 @@ class HTTPPoster : public SMTPHandler {
 			std::shared_ptr<CURL> curl(curl_easy_init(), curl_easy_cleanup);
 			struct curl_slist *slist = NULL; 
 			slist = curl_slist_append(slist, "Content-Type: application/json"); 
+			for (const auto& header : headers) {
+				curl_slist_append(slist, header.c_str());
+			}
 			curl_easy_setopt(curl.get(), CURLOPT_HTTPHEADER, slist); 
 			curl_easy_setopt(curl.get(), CURLOPT_CUSTOMREQUEST, "POST");
 			curl_easy_setopt(curl.get(), CURLOPT_POSTFIELDS, body.c_str());
@@ -177,6 +182,7 @@ class HTTPPoster : public SMTPHandler {
 
 	private:
 		std::string url;
+		std::vector<std::string> headers;
 		std::atomic_bool stopRequested;
 		std::thread* thread;
 		std::deque<SMTPMessage> queue;
@@ -388,6 +394,7 @@ int main(int argc, char* argv[]) {
 	try {
 		int port;
 		std::string httpURL;
+		std::vector<std::string> httpHeaders;
 
 		po::options_description options("Allowed options");
 		options.add_options()
@@ -397,7 +404,8 @@ int main(int argc, char* argv[]) {
 			("notify-fd", po::value<int>(), "Write to file descriptor when ready")
 			("bind", po::value<std::string>()->default_value("0.0.0.0"), "SMTP address to bind")
 			("port", po::value<int>(&port)->default_value(25), "SMTP port to bind")
-			("url", po::value<std::string>(&httpURL)->required(), "HTTP URL");
+			("url", po::value<std::string>(&httpURL)->required(), "HTTP URL")
+			("header,H", po::value<std::vector<std::string>>(&httpHeaders), "Extra HTTP Headers");
 		po::variables_map vm;
 		po::store(po::parse_command_line(argc, argv, options), vm);
 		if (vm.count("help")) {
@@ -428,7 +436,7 @@ int main(int argc, char* argv[]) {
 
 		boost::asio::io_service io_service;
 
-		HTTPPoster httpPoster(httpURL);
+		HTTPPoster httpPoster(httpURL, httpHeaders);
 		Server s(
 				io_service, 
 				bindAddress,
