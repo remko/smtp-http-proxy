@@ -1,7 +1,7 @@
 # Contributor: Remko Tronçon <remko@el-tramo.be>
 # Maintainer: Remko Tronçon <remko@el-tramo.be>
 pkgname=smtp-http-proxy
-pkgver=0.4
+pkgver=0.5
 pkgrel=0
 pkgdesc="Simple SMTP to HTTP proxy"
 url="https://el-tramo.be/smtp-http-proxy"
