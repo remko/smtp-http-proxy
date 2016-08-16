@@ -1,0 +1,6 @@
+#!/bin/sh
+
+s6-svwait -U /etc/s6/services/smtp-http-proxy
+s6-svwait /etc/s6/services/syslogd
+
+exec /usr/local/sbin/haproxy-systemd-wrapper -f /usr/local/etc/haproxy/haproxy.cfg -p /run/haproxy.pid 2>&1

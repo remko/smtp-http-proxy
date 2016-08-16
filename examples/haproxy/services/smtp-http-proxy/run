@@ -1,0 +1,3 @@
+#!/bin/sh
+
+exec smtp-http-proxy --debug -H "x-api-key: $AWS_LAMBDA_API_KEY" --url $SMTP_HTTP_URL --port 8025 --notify-fd 4 2>&1
