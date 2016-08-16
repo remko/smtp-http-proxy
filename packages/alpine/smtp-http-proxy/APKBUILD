@@ -35,6 +35,6 @@ package() {
 	mkdir -p "$pkgdir/usr/bin"
 	cp smtp-http-proxy "$pkgdir/usr/bin" || return 1
 }
-md5sums="3555136bcc592f6abaf761cb8c382a61  ${pkgname}-${pkgver}.tar.gz"
-sha256sums="fc2a581ecf91bc173e38e0839f2e6a9ee4a54f18738ae4b3edf811fc0596f75a  ${pkgname}-${pkgver}.tar.gz"
-sha512sums="4ac34c621bd24801d3c2055599e0348b698382e229902e9e608ea07970e67cb1bebe705e42aac8e782c3abe84c3425b28e218d589471767fb5223de14592afe3  ${pkgname}-${pkgver}.tar.gz"
+md5sums="860dedb21525f7c6217e06bdb33bddad  ${pkgname}-${pkgver}.tar.gz"
+sha256sums="fc23c729285d68a39bd42064cb8b993ce3e265d15450e2d4451da9e5a9c09a3b  ${pkgname}-${pkgver}.tar.gz"
+sha512sums="0730a5856afd51752cc817c19ab8635e45feb1d3a423de0694220bcbec824457f2269263f568587a6251f11d68fbc2099f68bc363b9e7ade57496714ea138d6d  ${pkgname}-${pkgver}.tar.gz"
